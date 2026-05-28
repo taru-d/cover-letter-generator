@@ -75,8 +75,25 @@ _COMPANY_DESCRIPTORS = {
     "target": "an organization known for combining retail innovation with strong in-house technology teams",
 }
 
-_MIN_WORDS = 450
+_MIN_WORDS = 420
 _MAX_WORDS = 650
+
+_JD_VERBS = re.compile(
+    r"\b(build|design|develop|create|implement|maintain|lead|manage|deliver|"
+    r"architect|optimize|deploy|analyze|support|scale|drive|own|collaborate|"
+    r"write|draft|research|coordinate|communicate|respond|facilitate|prepare|"
+    r"review|assess|evaluate|identify|report|track|monitor|work\s+on)\b",
+    re.IGNORECASE,
+)
+
+_CONTEXT_PHRASES = [
+    "gaining hands-on experience that required both independent judgment and clear stakeholder communication",
+    "building the kind of practical expertise that comes from working on real deliverables with real stakes",
+    "developing a professional discipline grounded in accountability, rigor, and cross-functional collaboration",
+    "cultivating the professional instincts that only emerge from navigating complex, ambiguous work environments",
+    "strengthening my capacity to deliver high-quality results in environments with competing priorities",
+    "deepening my understanding of how organizations operate effectively under real-world constraints",
+]
 
 
 def generate_cover_letter(
@@ -86,27 +103,35 @@ def generate_cover_letter(
     experiences: list,
     candidate_name: str = "",
     job_description: str = "",
+    ranked_bullets: list = None,
+    jd_requirements: list = None,
 ) -> str:
     """Generate a 5-paragraph cover letter (450–650 words):
-    opening (2+ sentences) → 3 body paragraphs (3+ sentences each) → closing (3+ sentences).
-    Never references skills explicitly. Always names companies from the resume.
-    Uses 'As a [role] at [company]' structure without pulling from bullet points.
+    opening → 3 body paragraphs (one per experience) → closing.
+    Never references skills or bullet points explicitly.
+    Always uses real company names from the resume.
     """
     real_experiences = [
         e for e in experiences
         if e["title"] != "Professional Experience" and e["company"].lower() != "various"
     ]
 
+    # If the parser could not extract structured experiences, use whatever it produced
+    # (including the "Various" fallback) so the letter is never left with zero experiences.
+    if not real_experiences:
+        real_experiences = experiences[:]
+
     selected_experiences = _select_experiences(matches, real_experiences)
 
-    opening = _build_opening(job_title, company, selected_experiences, candidate_name, job_description)
-    body_paragraphs = _build_body_paragraphs(selected_experiences, job_title, company, job_description)
-    closing = _build_closing(job_title, company, selected_experiences, candidate_name)
+    opening = _build_opening(job_title, company, selected_experiences, candidate_name, job_description, matches, real_experiences)
+    body_paragraphs = _build_body_paragraphs(selected_experiences, job_title, company, job_description, matches, ranked_bullets)
+    closing = _build_closing(job_title, company, selected_experiences, candidate_name, job_description)
 
     sign_off = f"Sincerely,\n{candidate_name}" if candidate_name else "Sincerely,\n[Your Name]"
     all_paragraphs = [p for p in [opening] + body_paragraphs + [closing] if p.strip()]
     letter_body = "\n\n".join(all_paragraphs)
     letter_body = _enforce_word_count(letter_body, job_title, company, selected_experiences, candidate_name)
+    letter_body = _post_review(letter_body)
     return "Dear Hiring Manager,\n\n" + letter_body + f"\n\n{sign_off}"
 
 
@@ -152,7 +177,7 @@ def extract_company(job_description: str) -> str:
 # ── Experience selection ─────────────────────────────────────────────────────
 
 def _select_experiences(matches: list, real_experiences: list) -> list:
-    """Select up to 3 experiences to feature, ranked by match relevance."""
+    """Select up to 3 experiences ranked by match relevance."""
     score_by_key: dict = defaultdict(int)
     for m in matches:
         key = (m["job_title"], m["company"])
@@ -188,39 +213,40 @@ def _build_opening(
     selected_experiences: list,
     candidate_name: str,
     job_description: str,
+    matches: list,
+    real_experiences: list = None,
 ) -> str:
     company_phrase = f" at {company}" if company else ""
 
     if candidate_name:
         sentence1 = (
-            f"My name is {candidate_name} and I am writing to express my strong interest "
-            f"in the {job_title} position{company_phrase}."
+            f"My name is {candidate_name} and I am writing to apply for the "
+            f"{job_title} position{company_phrase}."
         )
     else:
-        sentence1 = f"I am writing to express my strong interest in the {job_title} position{company_phrase}."
+        sentence1 = f"I am writing to apply for the {job_title} position{company_phrase}."
 
-    if selected_experiences:
-        recent = selected_experiences[0]
-        article = "an" if recent["title"][0].lower() in "aeiou" else "a"
-        descriptor = _company_descriptor(recent["company"])
+    # Opening sentence 2 references the most recent experience (first in resume order),
+    # not the highest-match experience, per the CLAUDE.md spec.
+    exp_for_opening = None
+    if real_experiences:
+        exp_for_opening = real_experiences[0]
+    elif selected_experiences:
+        exp_for_opening = selected_experiences[0]
+
+    if exp_for_opening:
+        clean_title = _clean_job_title_for_prose(exp_for_opening["title"])
+        article = "an" if clean_title[0].lower() in "aeiou" else "a"
         sentence2 = (
-            f"As {article} {recent['title']} at {recent['company']}, {descriptor}, "
-            f"I have developed a deep understanding of what it takes to deliver meaningful "
-            f"results in a fast-paced, technically demanding environment."
+            f"As {article} {clean_title} at {exp_for_opening['company']}, "
+            f"I built the experience and professional instincts this role demands."
         )
     else:
         sentence2 = (
-            "Throughout my career, I have developed a deep understanding of what it takes to "
-            "deliver meaningful results in a fast-paced, technically demanding environment."
+            "My professional background aligns closely with the requirements of this role."
         )
 
-    company_ref = company if company else "your team"
-    sentence3 = (
-        f"My professional background aligns closely with what this role demands, and I am "
-        f"confident that I can contribute meaningfully to {company_ref} from the very first day."
-    )
-
-    return f"{sentence1} {sentence2} {sentence3}"
+    return f"{sentence1} {sentence2}"
 
 
 def _build_body_paragraphs(
@@ -228,26 +254,114 @@ def _build_body_paragraphs(
     job_title: str,
     company: str,
     job_description: str,
+    matches: list,
+    ranked_bullets: list = None,
 ) -> list:
-    """Return exactly 3 body paragraphs. If fewer than 3 experiences exist,
-    generate additional paragraphs that still reference available experiences
-    from different angles."""
+    """Return exactly 3 body paragraphs — one per selected experience (paragraphs 2–4)."""
     paragraphs = []
     jd_themes = _extract_jd_themes(job_description)
     company_ref = company if company else "your organization"
+    used_jd_phrases: set = set()  # prevent the same JD phrase in every S3
 
     for i in range(3):
         if i < len(selected_experiences):
             para = _build_single_body_paragraph(
-                selected_experiences[i], job_title, company, job_description, jd_themes, i
+                selected_experiences[i], job_title, company, job_description,
+                matches, jd_themes, i, ranked_bullets, used_jd_phrases
             )
         else:
+            fallback_exp = selected_experiences[-1] if selected_experiences else None
             para = _build_supplemental_body_paragraph(
-                selected_experiences, job_title, company_ref, jd_themes, i
+                fallback_exp, job_title, company_ref, matches, jd_themes, i
             )
         paragraphs.append(para)
 
     return paragraphs
+
+
+def _s1_open(
+    index: int, article: str, title: str, company: str, bullet: Optional[str]
+) -> str:
+    """Sentence 1: introduce role and core activity. Structure is distinct per paragraph index."""
+    if bullet:
+        if index == 0:
+            return f"As {article} {title} at {company}, I {bullet}."
+        elif index == 1:
+            return f"At {company}, where I served as {article} {title}, I {bullet}."
+        else:
+            # "During my time as..." works cleanly with any past-tense verb
+            return f"During my time as {article} {title} at {company}, I {bullet}."
+    else:
+        if index == 0:
+            return (
+                f"As {article} {title} at {company}, I took on cross-functional work "
+                f"that required independent judgment and consistent execution."
+            )
+        elif index == 1:
+            return (
+                f"At {company}, I contributed as {article} {title} across initiatives "
+                f"that spanned planning, coordination, and direct stakeholder engagement."
+            )
+        else:
+            return (
+                f"My work as {article} {title} at {company} involved managing complex "
+                f"projects under real professional constraints."
+            )
+
+
+def _s2_growth(index: int, company: str) -> str:
+    """Sentence 2: what I learned. Each index uses a structurally distinct sentence."""
+    if index == 0:
+        return (
+            f"Working at {company} taught me how to communicate complex ideas clearly "
+            f"and deliver results across competing priorities."
+        )
+    elif index == 1:
+        return (
+            f"Through this role at {company}, I gained a sharper sense of how "
+            f"high-performing teams align on goals and follow through effectively."
+        )
+    else:
+        return (
+            f"{company} pushed me to operate at a higher standard of rigor "
+            f"and stakeholder awareness — one I have taken into every role since."
+        )
+
+
+def _s3_connect(
+    index: int, job_title: str, company_ref: str, jd_phrase: Optional[str]
+) -> str:
+    """Sentence 3: connect experience to target role. Each index uses a distinct structure."""
+    if index == 0:
+        if jd_phrase:
+            return f"That background gives me the foundation to {jd_phrase} at {company_ref}."
+        return f"That background gives me a strong foundation for the {job_title} role at {company_ref}."
+    elif index == 1:
+        if jd_phrase:
+            return f"I bring those same capabilities to {jd_phrase} as a {job_title} at {company_ref}."
+        return f"I bring those same capabilities to the {job_title} position at {company_ref}."
+    else:
+        if jd_phrase:
+            return f"That experience maps directly to the need to {jd_phrase} at {company_ref}."
+        return f"That background prepared me directly for the demands of the {job_title} role at {company_ref}."
+
+
+def _s4_reinforce(index: int, job_title: str) -> str:
+    """Sentence 4: concrete professional takeaway. Avoids repeating company name or S2/S3 language."""
+    if index == 0:
+        return (
+            "Those habits — delivering accurate, well-reasoned work under real deadlines "
+            "— are what I rely on most when the stakes are high."
+        )
+    elif index == 1:
+        return (
+            "I developed there a clear sense of how to earn trust quickly, "
+            "deliver on commitments, and communicate progress without being prompted."
+        )
+    else:
+        return (
+            f"It sharpened my professional judgment in ways that translate directly to this role."
+        )
 
 
 def _build_single_body_paragraph(
@@ -255,141 +369,101 @@ def _build_single_body_paragraph(
     job_title: str,
     hiring_company: str,
     job_description: str,
+    matches: list,
     jd_themes: list,
     index: int,
+    ranked_bullets: list = None,
+    used_jd_phrases: set = None,
 ) -> str:
-    """3+ sentence body paragraph for one experience. Uses 'As a [role] at [company]' structure.
-    Does NOT pull from bullet points — describes the experience in general professional terms.
-    """
-    title = exp["title"]
+    """3-sentence body paragraph. Each of the three paragraphs (index 0/1/2) uses
+    completely different sentence structures so no phrase ever repeats across them."""
+    title = _clean_job_title_for_prose(exp["title"])
     exp_company = exp["company"]
     article = "an" if title[0].lower() in "aeiou" else "a"
     company_ref = hiring_company if hiring_company else "your organization"
 
-    descriptor = _company_descriptor(exp_company)
+    # Find best ranked bullet — must be a genuine past-tense action statement
+    best_rb = None
+    if ranked_bullets:
+        for rb in ranked_bullets:
+            if (rb["company"] == exp_company
+                    and rb["job_title"] == exp["title"]
+                    and _is_action_bullet(rb["bullet"])
+                    and _bullet_is_verb_led(_clean_bullet_for_prose(rb["bullet"]))):
+                best_rb = rb
+                break
 
-    _role_descriptions = [
-        (
-            f"As {article} {title} at {exp_company}, {descriptor}, I took ownership of complex "
-            f"projects that required both technical depth and clear communication with stakeholders "
-            f"across the organization."
-        ),
-        (
-            f"As {article} {title} at {exp_company}, {descriptor}, I was responsible for driving "
-            f"initiatives that had a direct impact on the quality and reliability of the products "
-            f"my team delivered to users."
-        ),
-        (
-            f"As {article} {title} at {exp_company}, {descriptor}, I contributed to work that "
-            f"demanded creative problem solving, attention to detail, and the ability to deliver "
-            f"under tight deadlines while maintaining high standards."
-        ),
-    ]
-    sentence1 = _role_descriptions[index % len(_role_descriptions)]
+    bullet_prose = _clean_bullet_for_prose(best_rb["bullet"]) if best_rb else None
+    sentence1 = _s1_open(index, article, title, exp_company, bullet_prose)
 
-    _growth_descriptions = [
-        (
-            f"Working at {exp_company} challenged me to grow as both a technical contributor and "
-            f"a collaborator, and I consistently delivered work that exceeded expectations and "
-            f"earned the trust of my colleagues and leadership."
-        ),
-        (
-            f"Through this experience at {exp_company}, I refined my ability to break down ambiguous "
-            f"problems into actionable steps and drive them through to completion, which strengthened "
-            f"both my individual output and my value to the broader team."
-        ),
-        (
-            f"My time at {exp_company} gave me the opportunity to build strong working relationships "
-            f"across teams, develop a sharp sense of prioritization, and consistently deliver high-quality "
-            f"work that moved the needle on meaningful outcomes."
-        ),
-    ]
-    sentence2 = _growth_descriptions[index % len(_growth_descriptions)]
+    sentence2 = _s2_growth(index, exp_company)
 
-    theme = jd_themes[index] if index < len(jd_themes) else ""
-    if theme:
-        sentence3 = (
-            f"The experience I gained at {exp_company} directly prepared me to {theme} "
-            f"in the {job_title} role at {company_ref}, and I am eager to bring that same "
-            f"level of commitment and impact to this position."
-        )
-    else:
-        sentence3 = (
-            f"I am confident that the lessons I learned and the discipline I developed at "
-            f"{exp_company} will translate directly into strong performance as a {job_title} "
-            f"at {company_ref}."
-        )
+    # JD connection: use matched duty phrase, then JD theme — skip any already used
+    # across paragraphs so S3 never says the same thing in two consecutive paragraphs.
+    used = used_jd_phrases if used_jd_phrases is not None else set()
+    jd_phrase = None
+    if best_rb and best_rb.get("jd_duty"):
+        candidate = _extract_verb_phrase_from_duty(best_rb["jd_duty"])
+        if candidate and candidate not in used:
+            jd_phrase = candidate
+    if not jd_phrase:
+        for theme in jd_themes:
+            if theme not in used:
+                jd_phrase = theme
+                break
+    if jd_phrase:
+        used.add(jd_phrase)
+    sentence3 = _s3_connect(index, job_title, company_ref, jd_phrase)
 
-    return f"{sentence1} {sentence2} {sentence3}"
+    sentence4 = _s4_reinforce(index, job_title)
+
+    return f"{sentence1} {sentence2} {sentence3} {sentence4}"
 
 
 def _build_supplemental_body_paragraph(
-    selected_experiences: list,
+    exp: Optional[dict],
     job_title: str,
     company_ref: str,
+    matches: list,
     jd_themes: list,
     index: int,
 ) -> str:
-    """Generate an additional body paragraph when fewer than 3 experiences exist.
-    References available experiences from a different angle."""
-    if selected_experiences:
-        exp = selected_experiences[0]
-        exp_company = exp["company"]
-        descriptor = _company_descriptor(exp_company)
-    else:
-        exp_company = "my previous organization"
-        descriptor = "an organization with high standards"
+    """Supplemental paragraph when fewer than 3 distinct experiences exist.
+    Uses unique framing ('Beyond...') to differentiate from the main body paragraphs."""
+    if exp is None:
+        return (
+            f"Across my career I have consistently sought roles that demand clear thinking, "
+            f"strong execution, and the ability to collaborate across different stakeholder groups. "
+            f"Each position has built on the last and sharpened the professional instincts "
+            f"I bring to the {job_title} role at {company_ref}."
+        )
 
-    _supplemental_openers = [
-        (
-            f"Beyond my core responsibilities at {exp_company}, I also took initiative on "
-            f"cross-functional efforts that expanded my understanding of how teams collaborate "
-            f"to deliver complex outcomes under pressure."
-        ),
-        (
-            f"In addition to my primary work at {exp_company}, I sought out opportunities to "
-            f"contribute beyond my defined role, which gave me a broader perspective on how "
-            f"organizations operate and deliver value at scale."
-        ),
-        (
-            f"One of the most valuable aspects of my time at {exp_company} was the exposure "
-            f"I gained to challenges outside my immediate scope, which taught me how to think "
-            f"about problems holistically rather than in isolation."
-        ),
-    ]
-    sentence1 = _supplemental_openers[index % len(_supplemental_openers)]
+    exp_company = exp["company"]
+    title = _clean_job_title_for_prose(exp["title"])
+    article = "an" if title[0].lower() in "aeiou" else "a"
 
-    _supplemental_growth = [
-        (
-            f"This broader involvement sharpened my ability to communicate across disciplines, "
-            f"manage competing priorities, and deliver results that served the needs of multiple "
-            f"stakeholders simultaneously."
-        ),
-        (
-            f"These experiences strengthened my ability to adapt quickly to new contexts, build "
-            f"credibility with unfamiliar teams, and produce work that met the standards of "
-            f"an environment as demanding as {exp_company}."
-        ),
-        (
-            f"As a result, I developed the kind of professional versatility that allows me to "
-            f"step into new challenges with confidence, knowing that I can draw on a well-rounded "
-            f"foundation of experience to deliver meaningful contributions."
-        ),
-    ]
-    sentence2 = _supplemental_growth[index % len(_supplemental_growth)]
+    sentence1 = (
+        f"Beyond my core responsibilities as {article} {title} at {exp_company}, "
+        f"I also contributed to cross-functional work that broadened my perspective "
+        f"on how organizations coordinate and execute at scale."
+    )
+
+    # Growth sentence for supplemental — uses a unique structure not used in main paragraphs
+    sentence2 = (
+        f"This background gave me a practical understanding of how to navigate "
+        f"ambiguity, manage competing priorities, and deliver under real constraints."
+    )
 
     theme = jd_themes[index] if index < len(jd_themes) else ""
     if theme:
         sentence3 = (
-            f"I am confident that this background has prepared me to {theme} "
-            f"in the {job_title} role at {company_ref}, and I look forward to applying "
-            f"that same discipline and drive in this new context."
+            f"The breadth of that experience positions me well to {theme} "
+            f"in the {job_title} role at {company_ref}."
         )
     else:
         sentence3 = (
-            f"I am confident that this well-rounded background will serve me well as a "
-            f"{job_title} at {company_ref}, where I expect to encounter the kind of complex, "
-            f"rewarding challenges that bring out my best work."
+            f"Together, these experiences position me well for the {job_title} "
+            f"role at {company_ref}."
         )
 
     return f"{sentence1} {sentence2} {sentence3}"
@@ -400,6 +474,7 @@ def _build_closing(
     company: str,
     selected_experiences: list,
     candidate_name: str,
+    job_description: str = "",
 ) -> str:
     company_ref = company if company else "your organization"
 
@@ -407,43 +482,139 @@ def _build_closing(
     if len(company_names) >= 2:
         companies_str = _join_list(company_names)
         sentence1 = (
-            f"Across my experiences at {companies_str}, each with its own demanding standards "
-            f"and high expectations, I have built a professional foundation that is well suited "
-            f"to the demands of this role and the caliber of work I know {company_ref} produces."
+            f"My experience across {companies_str} built the practical foundation this role demands."
         )
     elif company_names:
-        descriptor = _company_descriptor(company_names[0])
         sentence1 = (
-            f"My experience at {company_names[0]}, {descriptor}, has given me a strong "
-            f"professional foundation that aligns directly with what this role requires."
+            f"My experience at {company_names[0]} built a strong, practical foundation "
+            f"for this role."
         )
     else:
-        sentence1 = (
-            f"My professional experience has given me a strong foundation that aligns directly "
-            f"with what this role requires."
-        )
+        sentence1 = f"My professional experience built a strong foundation for this role."
 
     hiring_descriptor = _company_descriptor(company_ref)
-    sentence2 = (
-        f"{company_ref} stands out to me as {hiring_descriptor}, and I am genuinely motivated "
-        f"by the opportunity to contribute to an organization operating at that level."
+    sentence2 = f"I am drawn to {company_ref} because it is {hiring_descriptor}."
+    sentence2b = (
+        f"I want to bring my skills and drive to an organization that operates at that level."
     )
 
     sentence3 = (
-        f"The {job_title} position represents the kind of opportunity I have been working toward "
-        f"throughout my career, and I am fully prepared to deliver results from day one."
+        f"The {job_title} position is exactly the next step I have been working toward, "
+        f"and I am fully prepared to contribute from day one."
     )
 
     sentence4 = (
-        f"I would welcome the opportunity to speak with your team about how my background "
-        f"and drive align with what {company_ref} is looking for, and I am available to "
-        f"connect at your earliest convenience."
+        f"I would welcome the chance to discuss how my background aligns with what "
+        f"{company_ref} is building, and I am available at your convenience."
     )
 
-    return f"{sentence1} {sentence2} {sentence3} {sentence4}"
+    return f"{sentence1} {sentence2} {sentence2b} {sentence3} {sentence4}"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _bullet_to_prose(bullet: str) -> str:
+    """Legacy minimal cleaner — prefer _clean_bullet_for_prose for all new call sites."""
+    cleaned = re.sub(r"^[-•*\d.)\s]+", "", bullet).strip()
+    if not cleaned:
+        return bullet.strip()
+    return cleaned[0].lower() + cleaned[1:]
+
+
+def _clean_bullet_for_prose(bullet: str) -> str:
+    """Clean and lightly paraphrase a resume bullet for natural prose insertion after 'I ...'.
+
+    Fixes:
+    - Trailing punctuation artifacts including '.,', ',,' combinations
+    - Embedded punctuation errors (e.g. "protections.,")
+    - Verbose filler phrases ("in order to", "was responsible for")
+    - Overly long bullets trimmed to a natural breakpoint (~14–16 words)
+    - Lowercases first character so 'I [text]' reads grammatically
+    """
+    text = re.sub(r"^[-•*\d.)\s]+", "", bullet).strip()
+    # Strip all trailing punctuation artifacts (handles ".,", ".,,", etc.)
+    text = re.sub(r"[\s.,;:!?]+$", "", text).strip()
+    # Fix embedded punctuation errors: "word.," → "word," and ".,word" → ", word"
+    text = re.sub(r"\.,", ", ", text)
+    text = re.sub(r",\.", ", ", text)
+    # Normalize whitespace
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    # Light structural improvements — only safe rewrites that don't break verb agreement
+    text = re.sub(r"\bfor scope of\b", "to evaluate the scope of", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bfor the purpose of\b", "to", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bin order to\b", "to", text, flags=re.IGNORECASE)
+    # Convert "was responsible for [gerund]" to just the past-tense verb
+    # e.g. "was responsible for drafting X" → "drafted X"
+    def _depassivize(m: re.Match) -> str:
+        gerund = m.group(1)  # e.g. "drafting"
+        stem = gerund[:-3]   # strip "-ing"
+        return (stem + "d" if stem.endswith("e") else stem + "ed")
+    text = re.sub(r"\bwas responsible for (\w+ing)\b", _depassivize, text, flags=re.IGNORECASE)
+    # Insert missing "the" before specific direct-object nouns that resume bullets commonly omit.
+    # e.g. "populated dataset with clauses" → "populated the dataset with clauses"
+    _ARTICLE_NOUNS = (
+        r"(dataset|database|spreadsheet|repository|codebase|schema|table|registry|"
+        r"catalog|inventory|pipeline|dashboard|backlog|roadmap|agenda|budget|report|"
+        r"proposal|model)\b"
+    )
+    text = re.sub(
+        r"\b(populated|queried|updated|cleaned|migrated|built|organized|maintained|"
+        r"managed|created|analyzed|reviewed|processed)\b\s+"
+        r"(?!a\b|an\b|the\b|this\b|our\b|their\b|all\b|each\b|every\b|\d)" + _ARTICLE_NOUNS,
+        lambda m: m.group(1) + " the " + m.group(2),
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Convert a leading gerund to past tense so "I [verb]" is grammatical.
+    # "Analyzing policies..." → "analyzed policies..."
+    # "Coordinating events..." → "coordinated events..."
+    words = text.split()
+    if words:
+        fw = words[0]
+        if fw.lower().endswith("ing") and len(fw) > 4:
+            stem = fw[:-3]  # "analyzing" → "analyz"
+            past = (stem + "d") if stem.endswith("e") else (stem + "ed")
+            text = past + text[len(fw):]
+    # Trim overly long bullets at a natural word-boundary (~14–16 words)
+    words = text.split()
+    if len(words) > 16:
+        _NATURAL_CUT = {"for", "in", "on", "by", "with", "from", "of", "at", "as",
+                        "across", "via", "into", "through", "during", "among"}
+        cut = 14
+        for i in range(min(16, len(words) - 1), 9, -1):
+            if words[i].lower() in _NATURAL_CUT:
+                cut = i
+                break
+        text = " ".join(words[:cut])
+        text = re.sub(r"[\s.,;:]+$", "", text)
+    # Strip dangling ", [gerund]" at end — occurs when a bullet is trimmed mid-phrase,
+    # leaving an incomplete participial like "...in the United States, analyzing"
+    text = re.sub(r",\s+[a-z]+ing$", "", text).strip()
+    # Lowercase first character for "I [text]" construction
+    if text:
+        text = text[0].lower() + text[1:]
+    return text
+
+
+def _clean_job_title_for_prose(title: str) -> str:
+    """Adapt a job title for natural use in a sentence.
+
+    Converts 'Title - Department' to 'Title in Department' so that
+    'As a Research Intern - Legal and Regulatory Compliance' becomes
+    'As a Research Intern in Legal and Regulatory Compliance'.
+    Also normalises any stray punctuation that would look robotic in prose.
+    """
+    # Replace " - Dept" / " – Dept" separators with " in Dept"
+    title = re.sub(r"\s*[-–—]\s*([A-Z])", lambda m: " in " + m.group(1), title)
+    # Normalise whitespace
+    title = re.sub(r"\s+", " ", title).strip()
+    return title
+
+
+def _canonical_skill_name(skill: str) -> str:
+    """Return the properly cased display name for a skill."""
+    return _CASE_MAP.get(skill.lower(), skill.title())
+
 
 def _company_descriptor(company_name: str) -> str:
     """Return a specific descriptor for a known company, or a generic professional one."""
@@ -454,16 +625,113 @@ def _company_descriptor(company_name: str) -> str:
     return "an organization with a strong reputation for delivering high-quality work"
 
 
+_KNOWN_IRREGULAR_VERBS = {
+    "led", "ran", "built", "wrote", "drove", "made", "set", "met", "won",
+    "grew", "kept", "held", "gave", "came", "went", "got", "put", "cut",
+    "let", "hit", "read", "found", "left", "sent", "took", "brought",
+    "drew", "spoke", "worked", "helped", "served", "taught", "learned",
+}
+
+
+def _is_action_bullet(text: str) -> bool:
+    """Return True if text is a genuine action statement (not a raw skills list)."""
+    if not text:
+        return False
+    lower = text.lower().strip()
+    _LABELS = (
+        "skills", "technical skills", "tools", "technologies", "frameworks",
+        "languages", "proficiencies", "competencies", "certifications",
+        "expertise", "areas of expertise", "key skills", "core skills",
+        "programming languages", "software", "platforms",
+    )
+    for label in _LABELS:
+        if lower.startswith(label + ":") or lower.startswith(label + " :"):
+            return False
+    parts = re.split(r",\s*", text)
+    if len(parts) >= 3:
+        avg_words = sum(len(p.split()) for p in parts) / len(parts)
+        if avg_words <= 2.5:
+            return False
+    return True
+
+
+def _bullet_is_verb_led(bullet: str) -> bool:
+    """Return True if the bullet begins with a past-tense action verb, making 'I [bullet]' grammatical.
+
+    Accepts past-tense (-ed, -ied) and known irregular past tenses.
+    Rejects gerunds (-ing) because 'I analyzing X' is not grammatical —
+    _clean_bullet_for_prose converts gerunds to past tense before this is called.
+    """
+    first_word = bullet.strip().split()[0].lower().rstrip(",.;:") if bullet.strip() else ""
+    if not first_word:
+        return False
+    # Past-tense regular verbs only (-ed / -ied), NOT gerunds (-ing)
+    if re.search(r"(ed|ied)$", first_word):
+        return True
+    return first_word in _KNOWN_IRREGULAR_VERBS
+
+
+def _derive_context_phrase(bullet: str, index: int) -> str:
+    """Return a natural context phrase that follows 'I [bullet activity]' in a sentence."""
+    b = bullet.lower()
+    if any(v in b for v in ["wrote", "write", "written", "draft", "authored", "edit", "brief", "memo", "policy", "report"]):
+        return "developing a strong command of professional writing and the ability to communicate complex ideas with clarity"
+    if any(v in b for v in ["research", "analyz", "evaluat", "assess", "investigat", "identif", "compil"]):
+        return "sharpening my analytical instincts and my ability to synthesize information into clear, actionable insights"
+    if any(v in b for v in ["manag", "led ", "direct", "supervis", "coordinat", "oversee", "facilitat"]):
+        return "strengthening my ability to keep complex work moving forward while maintaining alignment across all stakeholders"
+    if any(v in b for v in ["presented", "communicated", "briefed", "responded", "interview"]):
+        return "refining my ability to communicate clearly and build productive relationships across different audiences"
+    if any(v in b for v in ["support", "assist", "help", "constituent", "client", "customer"]):
+        return "developing a service-oriented mindset and the ability to meet the needs of diverse stakeholders effectively"
+    return _CONTEXT_PHRASES[index % len(_CONTEXT_PHRASES)]
+
+
+_PHRASE_NOUN_WORDS = {
+    "advocacy", "policy", "policies", "communications", "associate", "analyst",
+    "specialist", "coordinator", "consultant", "director", "manager", "officer",
+    "administrator", "representative", "education", "affairs", "outreach",
+    "engagement", "awareness", "compliance", "governance", "oversight",
+}
+
+
+def _jd_phrase_is_valid(phrase: str) -> bool:
+    """Return True if phrase is a grammatical infinitive fragment (verb-led, not a noun list)."""
+    if not phrase:
+        return False
+    words = phrase.split()
+    # Reject if a comma appears in the first 5 words — signals a noun list
+    if "," in " ".join(words[:5]):
+        return False
+    # Reject if any word after the first is a known professional noun
+    if any(w.lower().rstrip("s") in _PHRASE_NOUN_WORDS for w in words[1:]):
+        return False
+    return True
+
+
+def _extract_verb_phrase_from_duty(duty: str) -> str:
+    """Extract a usable verb phrase from a JD duty line for use after 'to ...'."""
+    cleaned = re.sub(
+        r"^(you\s+will|candidate\s+will|responsibilities\s+include|we\s+need\s+you\s+to|"
+        r"the\s+role\s+requires|this\s+role\s+requires|ability\s+to|must\s+be\s+able\s+to)\s+",
+        "",
+        duty.strip(),
+        flags=re.IGNORECASE,
+    ).strip()
+    verb_match = _JD_VERBS.search(cleaned)
+    if not verb_match:
+        return ""
+    fragment = cleaned[verb_match.start():].split(".")[0]
+    result = _trim_fragment(fragment)
+    if not result or len(result) <= 6:
+        return ""
+    return result.lower() if _jd_phrase_is_valid(result) else ""
+
+
 def _extract_jd_themes(job_description: str) -> list:
     """Extract action-oriented themes from the JD for use in body paragraph sentence 3."""
     if not job_description:
         return []
-
-    _JD_VERBS = re.compile(
-        r"\b(build|design|develop|create|implement|maintain|lead|manage|deliver|"
-        r"architect|optimize|deploy|analyze|support|scale|drive|own|collaborate|work\s+on)\b",
-        re.IGNORECASE,
-    )
 
     themes = []
     sentences = re.split(r"(?<=[.!?])\s+|\n", job_description)
@@ -482,7 +750,7 @@ def _extract_jd_themes(job_description: str) -> list:
         if verb_match:
             fragment = cleaned[verb_match.start():].split(".")[0]
             result = _trim_fragment(fragment)
-            if len(result) > 10:
+            if len(result) > 10 and _jd_phrase_is_valid(result):
                 themes.append(result.lower())
                 if len(themes) >= 3:
                     break
@@ -518,6 +786,92 @@ def _join_list(items: list) -> str:
     return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
+def _split_if_long(sent: str) -> str:
+    """Split a sentence over 25 words at the best natural break. Returns one or two sentences.
+
+    NOTE: em dash splits are intentionally skipped — our templates use double em dashes
+    for parenthetical insertions (X — [phrase] — Y), and splitting at the first dash
+    produces a subject-less fragment. Role/action patterns are handled explicitly instead.
+    """
+    if len(sent.split()) <= 25:
+        return sent
+
+    # Pattern: "At Company, where I served as ROLE, I ACTION"
+    m = re.match(
+        r"^(At .+?),\s+where\s+I\s+served\s+as\s+(an?\s+.+?),\s+I\s+(.+)",
+        sent, re.IGNORECASE,
+    )
+    if m:
+        anchor, role, action = m.group(1), m.group(2), m.group(3).rstrip(".")
+        s1 = f"{anchor}, I served as {role}."
+        s2 = f"I {action}."
+        if len(s1.split()) <= 25 and len(s2.split()) <= 25:
+            return f"{s1} {s2}"
+
+    # Pattern: "As ARTICLE ROLE at COMPANY, I ACTION"
+    m = re.match(
+        r"^As (an?\s+.+?)\s+at\s+(.+?),\s+I\s+(.+)",
+        sent, re.IGNORECASE,
+    )
+    if m:
+        role, company_part, action = m.group(1), m.group(2), m.group(3).rstrip(".")
+        s1 = f"I served as {role} at {company_part}."
+        s2 = f"I {action}."
+        if len(s1.split()) <= 25 and len(s2.split()) <= 25:
+            return f"{s1} {s2}"
+
+    # Pattern: "During my time as ROLE at COMPANY, I ACTION"
+    m = re.match(
+        r"^During my time as (an?\s+.+?)\s+at\s+(.+?),\s+I\s+(.+)",
+        sent, re.IGNORECASE,
+    )
+    if m:
+        role, company_part, action = m.group(1), m.group(2), m.group(3).rstrip(".")
+        s1 = f"I worked as {role} at {company_part}."
+        s2 = f"I {action}."
+        if len(s1.split()) <= 25 and len(s2.split()) <= 25:
+            return f"{s1} {s2}"
+
+    # Generic: split at ", and " after at least word 10
+    words = sent.split()
+    for i in range(10, min(22, len(words) - 1)):
+        if words[i].lower() == "and" and i > 0 and words[i - 1].endswith(","):
+            part1 = " ".join(words[:i]).rstrip(",") + "."
+            part2 = " ".join(words[i + 1:])
+            if part2:
+                part2 = part2[0].upper() + part2[1:]
+            if len(part1.split()) >= 5 and len(part2.split()) >= 4:
+                return f"{part1} {part2}"
+
+    return sent  # no safe split found
+
+
+def _post_review(letter_body: str) -> str:
+    """Run the 6-point quality checklist on the generated letter body.
+
+    1. Complete thoughts: strip dangling trailing conjunctions
+    2. Missing articles: targeted patterns (bulk handled in _clean_bullet_for_prose)
+    3. Trailing comma before period: fix
+    4. Repeated phrases: JD phrase deduplication handled in _build_body_paragraphs
+    5. Logical flow: enforced by paragraph templates — no extra pass needed
+    6. Sentence length: split any sentence over 25 words
+    """
+    # Check 3: comma directly before a period e.g. "I compiled data,."
+    letter_body = re.sub(r",\s*\.", ".", letter_body)
+
+    # Check 1: sentence that ends with a bare conjunction before the period
+    letter_body = re.sub(r"\b(and|but|or|so)\s*\.", ".", letter_body)
+
+    # Check 6: split sentences over 25 words
+    paragraphs = letter_body.split("\n\n")
+    reviewed = []
+    for para in paragraphs:
+        parts = re.split(r"(?<=[.!?])\s+", para)
+        parts = [_split_if_long(p) for p in parts]
+        reviewed.append(" ".join(parts))
+    return "\n\n".join(reviewed)
+
+
 def _enforce_word_count(
     letter_body: str,
     job_title: str,
@@ -537,9 +891,22 @@ def _enforce_word_count(
         )
         idx = 0
         while len(letter_body.split()) < _MIN_WORDS and idx < len(expansion_sentences):
+            # Insert into the closing paragraph (last paragraph) BEFORE the final sentence
+            # so the call-to-action always remains the last sentence of the letter.
             parts = letter_body.rsplit("\n\n", 1)
             if len(parts) == 2:
-                parts[0] = parts[0] + " " + expansion_sentences[idx]
+                closing = parts[1]
+                last_period = closing.rfind(". ")
+                if last_period > len(closing) // 3:
+                    # Insert the expansion sentence before the final sentence
+                    parts[1] = (
+                        closing[: last_period + 2]
+                        + expansion_sentences[idx]
+                        + " "
+                        + closing[last_period + 2:]
+                    )
+                else:
+                    parts[1] = closing + " " + expansion_sentences[idx]
                 letter_body = "\n\n".join(parts)
             else:
                 letter_body = letter_body + " " + expansion_sentences[idx]
@@ -566,53 +933,40 @@ def _trim_to_max(text: str) -> str:
 def _generate_expansion_sentences(
     job_title: str, company: str, selected_experiences: list, candidate_name: str
 ) -> list:
-    """Generate additional sentences to reach the minimum word count."""
+    """Generate additional sentences to reach the minimum word count.
+    Phrases here must not duplicate any language used in the body paragraphs."""
     company_ref = company if company else "your organization"
     sentences = []
 
     if selected_experiences:
         exp = selected_experiences[0]
         sentences.append(
-            f"My time at {exp['company']} taught me that consistent execution and clear "
-            f"communication are the foundations of any successful team, and I carry that "
-            f"mindset into every role I take on."
+            f"The rigor I developed at {exp['company']} — learning to prioritize clearly "
+            f"and follow through reliably — is a core professional asset."
         )
 
     sentences.append(
-        f"I thrive in environments that value both independent ownership and collaborative "
-        f"teamwork, and I believe {company_ref} offers exactly that kind of culture."
-    )
-    sentences.append(
-        f"Throughout my career, I have consistently sought opportunities to grow beyond my "
-        f"defined responsibilities and contribute to the broader success of the organizations "
-        f"I have been a part of."
+        f"Everything I know about {company_ref} tells me this role has high standards "
+        f"and meaningful work, which is exactly what I seek out."
     )
 
     if len(selected_experiences) >= 2:
         exp = selected_experiences[1]
         sentences.append(
-            f"The work I did at {exp['company']} reinforced my belief that strong results come "
-            f"from combining technical rigor with a genuine commitment to understanding the "
-            f"needs of the people your work serves."
+            f"At {exp['company']}, I learned that effective contributors understand "
+            f"the broader mission, not just their immediate tasks."
         )
 
     sentences.append(
-        f"I am committed to continuous learning and professional development, which I see "
-        f"as essential to thriving in a role like {job_title} where expectations evolve quickly."
+        f"I approach every role intent on adding clear, measurable value, "
+        f"and the {job_title} position at {company_ref} is no exception."
     )
 
     if len(selected_experiences) >= 3:
         exp = selected_experiences[2]
         sentences.append(
-            f"What I took away from my experience at {exp['company']} is that adaptability and "
-            f"a willingness to step outside your comfort zone are what separate good professionals "
-            f"from great ones."
+            f"My work at {exp['company']} reinforced that good judgment "
+            f"and reliable execution matter more than any credential."
         )
-
-    sentences.append(
-        f"I bring a track record of reliability, a strong sense of ownership, and the kind of "
-        f"professional maturity that allows me to navigate complex challenges without losing sight "
-        f"of the bigger picture."
-    )
 
     return sentences
