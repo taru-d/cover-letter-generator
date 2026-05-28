@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cover Letter Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --rose:    #9b2335;
+      --rose-dk: #7a1a28;
+      --rose-lt: #f7e8ea;
+      --text:    #1a1a1a;
+      --muted:   #5a5a5a;
+      --border:  #e2d0d3;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #faf8f8;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Nav ── */
+    nav {
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+    nav .wordmark {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--rose);
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 5rem 1.5rem 4rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--rose-lt);
+      color: var(--rose);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.9rem;
+      border-radius: 99px;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      max-width: 680px;
+      margin-bottom: 1.25rem;
+    }
+    h1 span { color: var(--rose); }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.65;
+      margin-bottom: 2.5rem;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--rose);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.875rem 2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.18s, transform 0.12s;
+      box-shadow: 0 2px 12px rgba(155, 35, 53, 0.28);
+    }
+    .cta:hover { background: var(--rose-dk); transform: translateY(-1px); }
+    .cta:active { transform: translateY(0); }
+    .cta svg { flex-shrink: 0; }
+
+    /* ── Feature strip ── */
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.25rem;
+      padding: 0 1.5rem 5rem;
+      max-width: 820px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .feature {
+      flex: 1 1 220px;
+      max-width: 250px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.25rem;
+      text-align: left;
+    }
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--rose-lt);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.85rem;
+      color: var(--rose);
+    }
+    .feature h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+    .feature p {
+      font-size: 0.825rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 1.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <span class="wordmark">Cover Letter Generator</span>
+  </nav>
+
+  <section class="hero">
+    <span class="badge">AI-Powered</span>
+    <h1>Cover letters that sound like <span>you</span></h1>
+    <p class="subtitle">
+      Upload your resume, paste a job description, and get a polished,
+      personalised cover letter in seconds — no filler phrases, no generic templates.
+    </p>
+    <a class="cta" href="https://tarus-cover-letter-generator.streamlit.app/" target="_blank" rel="noopener">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+      </svg>
+      Generate My Cover Letter
+    </a>
+  </section>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+      </div>
+      <h3>Resume-aware writing</h3>
+      <p>Parses your actual experience and weaves real roles and companies into every paragraph.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </div>
+      <h3>JD skill matching</h3>
+      <p>Identifies what the job requires and maps your strongest relevant experience to each point.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <h3>Quality checklist</h3>
+      <p>Every sentence is checked for grammar, article usage, and length before you see it.</p>
+    </div>
+  </div>
+
+  <footer>
+    Built with Streamlit &nbsp;·&nbsp; &copy; <script>document.write(new Date().getFullYear())</script> Tanya Dharma
+  </footer>
+
+</body>
+</html>
