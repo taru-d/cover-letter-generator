@@ -323,8 +323,8 @@ def _s2_growth(index: int, company: str) -> str:
         )
     else:
         return (
-            f"{company} pushed me to operate at a higher standard of rigor "
-            f"and stakeholder awareness — one I have taken into every role since."
+            f"{company} held me to a high standard of rigor and stakeholder awareness, "
+            f"a discipline I have carried into every role since."
         )
 
 
@@ -350,8 +350,8 @@ def _s4_reinforce(index: int, job_title: str) -> str:
     """Sentence 4: concrete professional takeaway. Avoids repeating company name or S2/S3 language."""
     if index == 0:
         return (
-            "Those habits — delivering accurate, well-reasoned work under real deadlines "
-            "— are what I rely on most when the stakes are high."
+            "Delivering accurate, well-reasoned work under real deadlines is the habit "
+            "I rely on most when the stakes are high."
         )
     elif index == 1:
         return (
@@ -789,9 +789,8 @@ def _join_list(items: list) -> str:
 def _split_if_long(sent: str) -> str:
     """Split a sentence over 25 words at the best natural break. Returns one or two sentences.
 
-    NOTE: em dash splits are intentionally skipped — our templates use double em dashes
-    for parenthetical insertions (X — [phrase] — Y), and splitting at the first dash
-    produces a subject-less fragment. Role/action patterns are handled explicitly instead.
+    NOTE: em dash splits are skipped here because _post_review strips all em-dashes
+    globally. Role/action patterns are handled explicitly instead.
     """
     if len(sent.split()) <= 25:
         return sent
@@ -856,6 +855,9 @@ def _post_review(letter_body: str) -> str:
     5. Logical flow: enforced by paragraph templates — no extra pass needed
     6. Sentence length: split any sentence over 25 words
     """
+    # Tone rule: no em-dashes anywhere in the letter
+    letter_body = re.sub(r"\s*—\s*", ", ", letter_body)
+
     # Check 3: comma directly before a period e.g. "I compiled data,."
     letter_body = re.sub(r",\s*\.", ".", letter_body)
 
@@ -941,8 +943,8 @@ def _generate_expansion_sentences(
     if selected_experiences:
         exp = selected_experiences[0]
         sentences.append(
-            f"The rigor I developed at {exp['company']} — learning to prioritize clearly "
-            f"and follow through reliably — is a core professional asset."
+            f"The discipline I developed at {exp['company']}, learning to prioritize clearly "
+            f"and follow through reliably, is one I apply to every role."
         )
 
     sentences.append(
