@@ -11,7 +11,7 @@ from skill_matcher import (
 from cover_letter import generate_cover_letter, extract_job_title, extract_company
 
 st.set_page_config(
-    page_title="Cover Letter Generator",
+    page_title="Tarunya's Cover Letter Generator",
     page_icon="✉️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -421,7 +421,7 @@ st.markdown("""
 
 st.markdown("""
 <div class="main-header">
-    <h1>Cover Letter Generator</h1>
+    <h1>Tarunya's Cover Letter Generator</h1>
     <p>Generate a tailored, professional cover letter from your resume and a job description.</p>
     <span class="byline">Built by Tarunya</span>
 </div>

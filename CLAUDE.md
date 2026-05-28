@@ -1,4 +1,4 @@
-# CLAUDE.md
+# Tarunya's Cover Letter Generator
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -65,6 +65,37 @@ Four modules with a clean pipeline:
 8. Tone must be confident, specific, and professional.
 9. Word count: minimum 450, maximum 650 words per cover letter.
 10. Never use generic filler phrases such as "I am excited to apply" or "I look forward to hearing from you".
+
+## Tone guidelines
+
+All cover letters are written in Tarunya's voice. Match this tone exactly.
+
+**Core traits:**
+- Concise sentences. No wordiness or filler.
+- Motivated and passionate, but never generic or gushing.
+- No em-dashes (never use —). Use commas, periods, or colons instead.
+- Written for a technical but non-developer audience. Explain roles and contributions in plain language.
+- Pitching herself: every statement positions her as qualified and ready.
+- Specific and data-driven. Reference real organizations, bills, actions, outcomes.
+- Statements are direct and to the point. Never vague.
+
+**What to avoid:**
+- Generic openers: "I am excited to apply", "I am passionate about", "I look forward to hearing from you"
+- Em-dashes (—) anywhere in the letter
+- Overly long sentences that bury the point
+- Abstract language where concrete language is possible
+
+**Reference examples — match this register and cadence exactly:**
+
+> As an interdisciplinary student, I bring in the unique perspective of someone who thinks beyond purely a legal or technical lens. Much of my concentration revolves around understanding all aspects of public and private systems: learning how regulatory systems are adapting, and how academia can bridge complex technical and regulatory needs into policy insight and action.
+
+> While working for State Senator Aisha Wahab, I tracked California legislation on AI and data privacy, including SB 933, and gave feedback on bills such as SB 403. I also coordinated voter outreach and mentored student volunteers, developing the communication and organizational skills necessary at SVLG for stakeholder engagement and policy advocacy.
+
+**Applying the tone in generated letters:**
+- Sentence 1 of each body paragraph: "As a [role] at [company]" + one specific, concrete description of responsibilities
+- Sentence 2: specific growth or outcome at that company, not general "I developed skills"
+- Sentence 3: direct connection to the target role, framed as readiness
+- Closing: name all companies, explain why this company and role specifically, close with a confident call to action (not "I look forward to hearing from you")
 
 ## Extending skill coverage
 
