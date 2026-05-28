@@ -132,7 +132,11 @@ def generate_cover_letter(
     letter_body = "\n\n".join(all_paragraphs)
     letter_body = _enforce_word_count(letter_body, job_title, company, selected_experiences, candidate_name)
     letter_body = _post_review(letter_body)
-    return "Dear Hiring Manager,\n\n" + letter_body + f"\n\n{sign_off}"
+    full_letter = "Dear Hiring Manager,\n\n" + letter_body + f"\n\n{sign_off}"
+    full_letter = re.sub(r"\s*[–—]\s*", ", ", full_letter)
+    full_letter = re.sub(r",\s*,", ",", full_letter)
+    full_letter = re.sub(r",\s*\.", ".", full_letter)
+    return full_letter
 
 
 # ── Extraction helpers (used by app.py to pre-fill UI fields) ─────────────────
@@ -534,6 +538,9 @@ def _clean_bullet_for_prose(bullet: str) -> str:
     text = re.sub(r"^[-•*\d.)\s]+", "", bullet).strip()
     # Strip all trailing punctuation artifacts (handles ".,", ".,,", etc.)
     text = re.sub(r"[\s.,;:!?]+$", "", text).strip()
+    # Remove em-dashes and en-dashes from bullet content
+    text = re.sub(r"\s*[–—]\s*", ", ", text)
+    text = re.sub(r",\s*,", ",", text)
     # Fix embedded punctuation errors: "word.," → "word," and ".,word" → ", word"
     text = re.sub(r"\.,", ", ", text)
     text = re.sub(r",\.", ", ", text)
@@ -855,8 +862,10 @@ def _post_review(letter_body: str) -> str:
     5. Logical flow: enforced by paragraph templates — no extra pass needed
     6. Sentence length: split any sentence over 25 words
     """
-    # Tone rule: no em-dashes anywhere in the letter
-    letter_body = re.sub(r"\s*—\s*", ", ", letter_body)
+    # Tone rule: no em-dashes or en-dashes anywhere in the letter
+    letter_body = re.sub(r"\s*[–—]\s*", ", ", letter_body)
+    letter_body = re.sub(r",\s*,", ",", letter_body)
+    letter_body = re.sub(r",\s*\.", ".", letter_body)
 
     # Check 3: comma directly before a period e.g. "I compiled data,."
     letter_body = re.sub(r",\s*\.", ".", letter_body)
